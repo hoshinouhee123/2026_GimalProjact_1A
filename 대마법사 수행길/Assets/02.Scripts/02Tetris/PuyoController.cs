@@ -11,7 +11,13 @@ public class PuyoController : MonoBehaviour
     [Header("Settings")]
     public float fallSpeed = 1.0f;      //뿌요가 떨어지는 속도(1초에 한 칸씩 떨어짐)
 
-    //
+
+    // --- 추가된 속성 데이터 ---
+    // 0: 빈칸, 1: 불, 2: 물, 3: 땅, 4: 공기
+    private int mainType;
+    private int subType;
+
+
     private Vector2Int mainPuyoPos;     //기준 뿌요의 보드 상 위치(x, y)
     private int rotationState = 0;             //회전 상태(0:위, 1:오른쪽, 2:아래, 3:왼쪽)
     private float fallTimer = 0.0f;              //뿌요가 떨어지는 타이머
@@ -55,6 +61,10 @@ public class PuyoController : MonoBehaviour
         mainPuyoPos = new Vector2Int(boardManager.width / 2, boardManager.height - 1); //보드 중앙 맨 위에 뿌요 생성
         rotationState = 0; //sub 뿌요는 처음에 위쪽에 위치
 
+        //1부터 4까지(5는 포함 안됨) 랜덤한 숫자를 뽑아 속성 부여
+        mainType = Random.Range(1, 5);
+        subType = Random.Range(1, 5);
+
         UpdateVisuals(); 
     }
 
@@ -86,11 +96,43 @@ public class PuyoController : MonoBehaviour
         }
         else if (dy == -1) //아래로 이동이 불가능한 경우(뿌요가 바닥이나 다른 뿌요에 닿은 경우)
         {
-            Debug.Log("뿌요가 바닥이나 다른 뿌요에 닿았습니다. 고정 처리 필요!"); //고정 처리 필요
+            LockPuyos(); //뿌요를 보드에 고정
 
-            // 임시로 다시 맨 위에서 스폰되게 처리
             SpawnNewPuyo(); //새로운 뿌요 생성
         }
+    }
+
+    private void LockPuyos()
+    {
+        Vector2Int subPos = GetSubPuyoPos(mainPuyoPos, rotationState); //현재 회전 상태에서 sub 뿌요의 위치 계산
+
+        bool mainIsLower = mainPuyoPos.y <= subPos.y; //기준 뿌요가 sub 뿌요보다 아래에 있는지 확인
+
+        if (mainIsLower)
+        {
+            DropAndLock(mainPuyoPos.x, mainPuyoPos.y, mainType);
+            DropAndLock(subPos.x, subPos.y, subType);
+        }
+        else
+        {
+            DropAndLock(subPos.x, subPos.y, subType);
+            DropAndLock(mainPuyoPos.x, mainPuyoPos.y, mainType);
+        }
+    }
+
+    // 뿌요를 떨어뜨리고 보드에 고정하는 함수
+    private void DropAndLock(int x, int startY, int type)
+    {
+        int targetY = startY;
+
+        // 자신의 바로 아래(targetY - 1)가 보드 범위 안이고 빈칸(0)이면 계속 내려감
+        while (targetY - 1 >= 0 && boardManager.IsEmpty(x, targetY - 1))
+        {
+            targetY--;
+        }
+
+        // 바닥을 찾았으니 보드에 기록
+        boardManager.PlacePuyo(x, targetY, type);
     }
 
     // 시계 방향 회전 함수
@@ -125,11 +167,25 @@ public class PuyoController : MonoBehaviour
     private void UpdateVisuals()
     {
         mainPuyoObj.transform.position = boardManager.GridToWorldPosition(mainPuyoPos.x, mainPuyoPos.y); //기준 뿌요 위치 업데이트
-
         Vector2Int subPuyoPos = GetSubPuyoPos(mainPuyoPos, rotationState); //현재 회전 상태에서 sub 뿌요의 위치 계산
         subPuyoObj.transform.position = boardManager.GridToWorldPosition(subPuyoPos.x, subPuyoPos.y); //sub 뿌요 위치 업데이트
+
+        SetPuyoSprite(mainPuyoObj, mainType);
+        SetPuyoSprite(subPuyoObj, subType);
     }
 
+    private void SetPuyoSprite(GameObject puyo, int type)
+    {
+        SpriteRenderer sr = puyo.GetComponent<SpriteRenderer>();
+        if (sr == null) return;
 
+        sr.color = Color.white; // 색상 초기화
+
+        // BoardManager에 저장해둔 이미지 배열을 가져다 씀.
+        if (type >= 1 && type <= 4)
+        {
+            sr.sprite = boardManager.puyoSprites[type];
+        }
+    }
 
 }

@@ -1,9 +1,29 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using TMPro; // 텍스트를 위해 추가
+using DG.Tweening; // DOTween을 위해 추가
+using UnityEngine.SceneManagement;
 
 public class BoardManager : MonoBehaviour
 {
+    [Header("UI & Score")]
+    public TextMeshProUGUI scoreText;
+    public TextMeshProUGUI comboText;
+    public int score = 0;
+
+    [Header("Skill Settings")]
+    public PuyoController puyoController; // Земля(Earth) 스킬을 위해 조종사 연결 필요
+
+    // 남은 횟수
+    private int fireUses = 1;
+    private int earthUses = 3;
+    private int airUses = 1;
+
+    // 스킬 상태 변수
+    private bool isFireActive = false;
+    private float baseComboBonus = 1.5f; // 기본 연쇄 보너스 1.5배 (공기 스킬 쓰면 증가)
+
     [Header("Board Settings")]
     public int width = 7; //뿌요뿌요 가로 크기
     public int height = 12; //뿌요뿌요 세로 크기
@@ -25,10 +45,12 @@ public class BoardManager : MonoBehaviour
 
     void Awake()
     {
-        //1. 게임 시작 시 보드 초기화
         grid = new int[width, height];
-        puyoObjects = new GameObject[width, height];    //뿌요 오브젝트 배열 초기화
+        puyoObjects = new GameObject[width, height];
         ClearBoard();
+
+        comboText.gameObject.SetActive(false); // 시작할 때 콤보 텍스트 숨김
+        UpdateScoreText();
     }
 
     // 보드를 전부 빈칸(0)으로 초기화하는 함수
@@ -156,35 +178,28 @@ public class BoardManager : MonoBehaviour
         return connected;       // 연결된 뿌요의 좌표 리스트 반환
     }
 
-    public bool CheckAndDestroyMatches()
+    // 수정됨: 매개변수로 콤보(comboCount)를 받아서 점수를 계산합니다.
+    public bool CheckAndDestroyMatches(int comboCount)
     {
-        bool[,] hasMatched = new bool[width, height]; // 터질 예정인 뿌요들 체크
+        bool[,] hasMatched = new bool[width, height];
         bool matchFound = false;
+        int destroyedPuyoCount = 0; // 터진 뿌요 개수 세기
 
-        // 보드 전체를 스캔합니다.
+        // (기존 Flood Fill 탐색 로직 동일하게 유지...)
         for (int x = 0; x < width; x++)
         {
             for (int y = 0; y < height; y++)
             {
-                // 빈 칸이 아니고, 아직 검사 안 한 뿌요라면
                 if (grid[x, y] != 0 && !hasMatched[x, y])
                 {
                     int type = grid[x, y];
                     List<Vector2Int> connected = FindConnectedPuyos(x, y, type);
 
-                    // 4개 이상 연결되었는가 확인
                     if (connected.Count >= 4)
                     {
                         matchFound = true;
+                        destroyedPuyoCount += connected.Count; // 개수 누적
 
-                        // 5개 이상 연결되면 스킬 발동
-                        if (connected.Count >= 5)
-                        {
-                            Debug.Log($"[{type}] 속성 스킬 발동!! (연결된 개수: {connected.Count}개)");
-                            // 나중에 여기에 이펙트나 몬스터 공격 코드를 넣으면 됨
-                        }
-
-                        // 터질 목록에 등록
                         foreach (Vector2Int pos in connected)
                         {
                             hasMatched[pos.x, pos.y] = true;
@@ -196,6 +211,15 @@ public class BoardManager : MonoBehaviour
 
         if (matchFound)
         {
+            //  1. 점수 계산 로직
+            CalculateScore(destroyedPuyoCount, comboCount);
+
+            //  2. 콤보 텍스트 DOTween 연출 (2연쇄 이상일 때만)
+            if (comboCount >= 2)
+            {
+                ShowComboText(comboCount);
+            }
+
             for (int x = 0; x < width; x++)
             {
                 for (int y = 0; y < height; y++)
@@ -204,20 +228,13 @@ public class BoardManager : MonoBehaviour
                     {
                         grid[x, y] = 0;
 
-                        // 수정됨: 즉시 파괴하지 않고 부드럽게 줄어드는 애니메이션 코루틴 실행
                         GameObject puyoToDestroy = puyoObjects[x, y];
-                        Vector3 pos = puyoToDestroy.transform.position; // 터지는 위치 저장
+                        Vector3 pos = puyoToDestroy.transform.position;
 
-                        // 1. 파티클 이펙트 생성
-                        if (popEffectPrefab != null)
-                        {
-                            Instantiate(popEffectPrefab, pos, Quaternion.identity);
-                        }
+                        if (popEffectPrefab != null) Instantiate(popEffectPrefab, pos, Quaternion.identity);
 
-                        // 2. 크기가 줄어들며 파괴되는 코루틴 실행
                         StartCoroutine(ShrinkAndDestroy(puyoToDestroy));
-
-                        puyoObjects[x, y] = null; // 배열에서는 즉시 비워줌
+                        puyoObjects[x, y] = null;
                     }
                 }
             }
@@ -286,5 +303,91 @@ public class BoardManager : MonoBehaviour
 
         // 완전히 작아지면 화면에서 삭제
         Destroy(puyo);
+    }
+
+    private void CalculateScore(int count, int combo)
+    {
+        // 1. 기본 점수 (뿌요 1개당 100점)
+        float currentScore = count * 100f;
+
+        // 2. 연쇄 보너스 (1.5배수 적용) -> 1연쇄는 1배, 2연쇄는 1.5배, 3연쇄는 2.25배...
+        float comboMultiplier = Mathf.Pow(baseComboBonus, combo - 1);
+        currentScore *= comboMultiplier;
+
+        // 3. 불 스킬(점수 2배) 적용
+        if (isFireActive) currentScore *= 2f;
+
+        // 점수 합산 및 UI 업데이트
+        score += Mathf.RoundToInt(currentScore);
+        UpdateScoreText();
+
+        // 점수가 오를 때 텍스트가 통통 튀는 DOTween 연출!
+        scoreText.transform.DOKill(); // 기존 애니메이션 취소
+        scoreText.transform.localScale = Vector3.one;
+        scoreText.transform.DOPunchScale(Vector3.one * 0.3f, 0.3f, 10, 1);
+    }
+
+    private void UpdateScoreText()
+    {
+        scoreText.text = "Score: " + score;
+    }
+
+    private void ShowComboText(int combo)
+    {
+        comboText.gameObject.SetActive(true);
+        comboText.text = combo + " 연쇄!!";
+
+        // DOTween Sequence로 나타났다 사라지는 쫀득한 애니메이션
+        Sequence seq = DOTween.Sequence();
+        comboText.transform.localScale = Vector3.zero;
+
+        seq.Append(comboText.transform.DOScale(Vector3.one, 0.3f).SetEase(Ease.OutBack)); // 뿅! 나타남
+        seq.AppendInterval(0.5f); // 0.5초 대기
+        seq.Append(comboText.transform.DOScale(Vector3.zero, 0.2f).SetEase(Ease.InBack)); // 스르륵 사라짐
+    }
+
+    // ==========================================
+    // 스킬 발동 함수들 (버튼에 연결할 것들)
+    // ==========================================
+
+    // 1. 불 스킬 (10초간 점수 2배)
+    public void UseFireSkill()
+    {
+        if (fireUses > 0 && !isFireActive)
+        {
+            fireUses--;
+            Debug.Log(" 불 스킬 발동! 10초간 점수 2배!");
+            StartCoroutine(FireSkillTimer());
+        }
+    }
+
+    private IEnumerator FireSkillTimer()
+    {
+        isFireActive = true;
+        yield return new WaitForSeconds(10f);
+        isFireActive = false;
+        Debug.Log(" 불 스킬 종료.");
+    }
+
+    // 2. 땅 스킬 (다음 블록 색깔 랜덤 변화)
+    public void UseEarthSkill()
+    {
+        if (earthUses > 0)
+        {
+            earthUses--;
+            Debug.Log($" 땅 스킬 발동! 다음 블록 리롤 (남은횟수: {earthUses})");
+            puyoController.RerollNextPuyo(); // 조종사에게 명령!
+        }
+    }
+
+    // 3. 공기 스킬 (연쇄 보너스 증가 1.5배 -> 2.0배)
+    public void UseAirSkill()
+    {
+        if (airUses > 0)
+        {
+            airUses--;
+            Debug.Log(" 공기 스킬 발동! 이제부터 연쇄 보너스 대폭 증가!");
+            baseComboBonus = 2.0f;
+        }
     }
 }

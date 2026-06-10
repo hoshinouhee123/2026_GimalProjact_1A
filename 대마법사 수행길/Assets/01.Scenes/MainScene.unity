@@ -129,7 +129,7 @@ GameObject:
   m_Component:
   - component: {fileID: 53128763}
   m_Layer: 0
-  m_Name: "@ === \uC624\uBE0C\uC81D\uD2B8 ==="
+  m_Name: "@\uC624\uBE0C\uC81D\uD2B8"
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -160,7 +160,7 @@ GameObject:
   m_Component:
   - component: {fileID: 76518279}
   m_Layer: 0
-  m_Name: // === MAIN ===
+  m_Name: "///\uCE74\uBA54\uB77C"
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -430,7 +430,7 @@ GameObject:
   m_Component:
   - component: {fileID: 578254048}
   m_Layer: 0
-  m_Name: /// === UI ===
+  m_Name: "// \uCE94\uBC84\uC2A4"
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -831,10 +831,11 @@ MonoBehaviour:
   puyoPrefab: {fileID: 8569513399904804714, guid: 2ca5f300d2430f34a90a9b6dbc6ae221, type: 3}
   puyoSprites:
   - {fileID: 0}
-  - {fileID: 21300000, guid: 17b64731cad52b94fa6e2b169f94ebbc, type: 3}
-  - {fileID: 21300000, guid: 27565d28816268f43b94596abdbcbac2, type: 3}
-  - {fileID: 21300000, guid: 42a0179461db5d448903892b60bfb634, type: 3}
-  - {fileID: 21300000, guid: 4cd82c1af0f0d21479387ce614edc8c4, type: 3}
+  - {fileID: 21300000, guid: 058d34deace762d41893620d89292303, type: 3}
+  - {fileID: 21300000, guid: ce054e343be7bf34daec1114dc353191, type: 3}
+  - {fileID: 21300000, guid: 89c18b6a2103c73428d68fc2270446bf, type: 3}
+  - {fileID: 21300000, guid: c806fa13aabfba4449082623d6b09ac5, type: 3}
+  popEffectPrefab: {fileID: 0}
 --- !u!4 &1060250262
 Transform:
   m_ObjectHideFlags: 0
@@ -860,7 +861,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1839256429}
   m_Layer: 0
-  m_Name: "# === \uB9E4\uB2C8\uC800 ==="
+  m_Name: "# \uB9E4\uB2C8\uC800"
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

@@ -1,4 +1,6 @@
 using UnityEngine;
+using System.Collections;
+
 
 public class PuyoController : MonoBehaviour
 {
@@ -22,6 +24,8 @@ public class PuyoController : MonoBehaviour
     private int rotationState = 0;             //회전 상태(0:위, 1:오른쪽, 2:아래, 3:왼쪽)
     private float fallTimer = 0.0f;              //뿌요가 떨어지는 타이머
 
+    private bool canPlay = true;    // 콤보가 터지고 떨어지는 동안 플레이어가 조작하지 못하게 막는 변수
+
 
     void Start()
     {
@@ -30,6 +34,9 @@ public class PuyoController : MonoBehaviour
 
     void Update()
     {
+        // 콤보 연출 중일 때는 키보드 입력이나 자동 낙하를 무시
+        if (!canPlay) return;
+
         //1.키보드 입력 처리
         if (Input.GetKeyDown(KeyCode.A)) TryMove(-1, 0);        //왼쪽
         if (Input.GetKeyDown(KeyCode.D)) TryMove(1, 0);        //오른쪽
@@ -65,6 +72,10 @@ public class PuyoController : MonoBehaviour
         mainType = Random.Range(1, 5);
         subType = Random.Range(1, 5);
 
+        // 새로 추가: 숨겨뒀던 원본 뿌요들을 다시 화면에 보이게 켭니다!
+        mainPuyoObj.SetActive(true);
+        subPuyoObj.SetActive(true);
+
         UpdateVisuals(); 
     }
 
@@ -98,7 +109,11 @@ public class PuyoController : MonoBehaviour
         {
             LockPuyos(); //뿌요를 보드에 고정
 
-            SpawnNewPuyo(); //새로운 뿌요 생성
+            // 새로 추가: 보드에 복제본을 심었으니, 플레이어가 조종하던 원본은 화면에서 잠시 숨깁니다!
+            mainPuyoObj.SetActive(false);
+            subPuyoObj.SetActive(false);
+
+            StartCoroutine(ProcessMatchesRoutine());    //연쇄 콤보를 관리하는 코루틴을 실행
         }
     }
 
@@ -188,4 +203,35 @@ public class PuyoController : MonoBehaviour
         }
     }
 
+    private IEnumerator ProcessMatchesRoutine()
+    {
+        canPlay = false; // 진행되는 동안 플레이어 조작 금지
+
+        // 무한 루프로 콤보가 끝날 때까지 반복.
+        while (true)
+        {
+            // 1. 4개 이상 연결된 뿌요 터뜨리기
+            bool matched = boardManager.CheckAndDestroyMatches();
+
+            if (!matched)
+            {
+                // 터진 게 없다면 무한 루프를 빠져나감. (콤보 종료)
+                break;
+            }
+
+            // 2. 터진 직후 바로 떨어지면 안 보이니 0.5초 잠깐 대기 
+            yield return new WaitForSeconds(0.5f);
+
+            // 3. 중간이 비었으니 공중에 뜬 뿌요들을 아래로 떨어뜨리기 
+            boardManager.ApplyGravity();
+
+            // 4. 떨어지고 나서 바로 터지지 않게 또 0.5초 대기 
+            // (이후 다시 while문 처음으로 돌아가서 또 4개가 모였는지 검사 = 연쇄 작용)
+            yield return new WaitForSeconds(0.5f);
+        }
+
+        // 모든 연쇄(콤보)가 끝나고 조용해지면
+        SpawnNewPuyo(); // 맨 위에서 새 뿌요 스폰
+        canPlay = true; // 다시 플레이어 조작 허용
+    }
 }

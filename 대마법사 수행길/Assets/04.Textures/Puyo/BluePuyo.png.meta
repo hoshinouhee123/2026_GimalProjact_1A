@@ -1,10 +1,10 @@
 fileFormatVersion: 2
-guid: 17b64731cad52b94fa6e2b169f94ebbc
+guid: ce054e343be7bf34daec1114dc353191
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: -1995545185801342179
-    second: FirePuyo_0
+      213: -5106323137207484025
+    second: BluePuyo_0
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -51,7 +51,7 @@ TextureImporter:
   spriteMeshType: 1
   alignment: 0
   spritePivot: {x: 0.5, y: 0.5}
-  spritePixelsToUnits: 100
+  spritePixelsToUnits: 64
   spriteBorder: {x: 0, y: 0, z: 0, w: 0}
   spriteGenerateFallbackPhysicsShape: 1
   alphaUsage: 1
@@ -113,7 +113,7 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: FirePuyo_0
+      name: BluePuyo_0
       rect:
         serializedVersion: 2
         x: 0
@@ -128,8 +128,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: d13f113f9366e44e0800000000000000
-      internalID: -1995545185801342179
+      spriteID: 781c3624922b229b0800000000000000
+      internalID: -5106323137207484025
       vertices: []
       indices: 
       edges: []
@@ -148,7 +148,7 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      FirePuyo_0: -1995545185801342179
+      BluePuyo_0: -5106323137207484025
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

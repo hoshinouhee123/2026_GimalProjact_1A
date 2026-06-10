@@ -7,6 +7,14 @@ using UnityEngine.SceneManagement;
 
 public class BoardManager : MonoBehaviour
 {
+    [Header("Game Over & Timer")]
+    public TextMeshProUGUI timerText;       // 타이머 텍스트
+    public GameObject gameOverPanel;        // 게임오버 패널
+    public TextMeshProUGUI finalScoreText;  // 최종 점수 텍스트
+
+    public float timeLimit = 180f;          // 제한 시간 3분 (180초)
+    public bool isGameOver = false;         // 게임오버 상태 확인
+
     [Header("UI & Score")]
     public TextMeshProUGUI scoreText;
     public TextMeshProUGUI comboText;
@@ -43,6 +51,9 @@ public class BoardManager : MonoBehaviour
     [Header("Effects")]
     public GameObject popEffectPrefab; // 새로 추가: 터질 때 생성할 파티클 이펙트
 
+    public Transform gameOverTitle;  // "Game Over"라고 적힌 큰 글자
+    public Transform restartButton;  // "다시 하기" 버튼
+
     void Awake()
     {
         grid = new int[width, height];
@@ -51,6 +62,30 @@ public class BoardManager : MonoBehaviour
 
         comboText.gameObject.SetActive(false); // 시작할 때 콤보 텍스트 숨김
         UpdateScoreText();
+
+        gameOverPanel.SetActive(false); // 시작할 때 게임오버 패널 끄기
+    }
+
+    void Update()
+    {
+        if (isGameOver) return; // 게임오버면 타이머 정지
+
+        timeLimit -= Time.deltaTime; // 시간 감소
+
+        if (timeLimit <= 0)
+        {
+            timeLimit = 0;
+            TriggerGameOver("Time Over!"); // 시간이 다 되면 게임오버!
+        }
+
+        UpdateTimerText();
+    }
+
+    private void UpdateTimerText()
+    {
+        int minutes = Mathf.FloorToInt(timeLimit / 60);
+        int seconds = Mathf.FloorToInt(timeLimit % 60);
+        timerText.text = string.Format("{0:00}:{1:00}", minutes, seconds);
     }
 
     // 보드를 전부 빈칸(0)으로 초기화하는 함수
@@ -94,12 +129,10 @@ public class BoardManager : MonoBehaviour
 
     public void PlacePuyo(int x, int y, int type)
     {
-        // 수정됨: 블록이 화면 꼭대기(배열의 끝)를 넘어가면 에러 대신 게임 오버 로그를 띄웁니다.
+        // 수정됨: 블록이 천장을 넘어가면 게임오버 발동
         if (y >= height)
         {
-            Debug.LogWarning("게임 오버! 보드가 꽉 찼습니다.");
-            // 원래는 여기서 게임오버 팝업을 띄우거나 게임을 멈춰야 합니다.
-            // 일단 에러가 안 나도록 return 으로 빠져나갑니다.
+            TriggerGameOver("보드가 꽉 찼습니다!");
             return;
         }
 
@@ -109,15 +142,54 @@ public class BoardManager : MonoBehaviour
         GameObject newPuyo = Instantiate(puyoPrefab, pos, Quaternion.identity);
 
         SpriteRenderer sr = newPuyo.GetComponent<SpriteRenderer>();
-        sr.color = Color.white; // 색깔이 섞이지 않게 기본 흰색으로.
+        sr.color = Color.white;
 
-        // 배열에서 속성 번호(type)에 맞는 이미지를 꺼내서 적용
         if (type >= 1 && type <= 4)
         {
             sr.sprite = puyoSprites[type];
         }
 
         puyoObjects[x, y] = newPuyo;
+    }
+
+    public void TriggerGameOver(string reason)
+    {
+        if (isGameOver) return;
+
+        isGameOver = true;
+        Debug.Log("게임 오버 원인: " + reason);
+
+        // 진행 중이던 모든 DOTween 강제 종료 (안전 장치)
+        DOTween.KillAll();
+
+        // 1. 일단 패널 켜기 (아직 글자는 안 보임)
+        gameOverPanel.SetActive(true);
+        finalScoreText.text = "최종 점수: " + score + " 점";
+
+        // 2. 애니메이션 시작 전 초기 상태 세팅
+        // 타이틀을 화면 한참 위(+800)로 올려둡니다. (원래 위치를 기억해둠)
+        float originalY = gameOverTitle.localPosition.y;
+        gameOverTitle.localPosition = new Vector3(gameOverTitle.localPosition.x, originalY + 800f, 0);
+
+        // 점수와 버튼은 크기를 0으로 만들어서 숨깁니다.
+        finalScoreText.transform.localScale = Vector3.zero;
+        restartButton.localScale = Vector3.zero;
+
+        // 3. DOTween 시퀀스(연속 애니메이션) 만들기
+        Sequence gameOverSeq = DOTween.Sequence();
+
+        // [첫 번째 연출]: 타이틀이 원래 위치(originalY)로 1.5초 동안 통통 튀며(OutBounce) 떨어집니다!
+        gameOverSeq.Append(gameOverTitle.DOLocalMoveY(originalY, 1.5f).SetEase(Ease.OutBounce));
+
+        // [두 번째 연출]: 타이틀이 다 떨어지면, 점수와 버튼이 0.4초 동안 뿅!(OutBack) 하고 커지며 나타납니다.
+        gameOverSeq.Append(finalScoreText.transform.DOScale(Vector3.one, 0.4f).SetEase(Ease.OutBack));
+        gameOverSeq.Join(restartButton.DOScale(Vector3.one, 0.4f).SetEase(Ease.OutBack)); // Join은 앞의 연출과 동시에 실행하라는 뜻
+    }
+
+    public void RestartGame()
+    {
+        // 현재 씬을 다시 로드합니다. (모든 게 초기화됨)
+        SceneManager.LoadScene(SceneManager.GetActiveScene().name);
     }
 
     // 5.유니티에서 그리드 선을 볼 수 있도록 하는 함수 (디버그용)

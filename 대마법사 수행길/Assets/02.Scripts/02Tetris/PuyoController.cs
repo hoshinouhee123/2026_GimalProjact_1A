@@ -40,18 +40,16 @@ public class PuyoController : MonoBehaviour
 
     void Update()
     {
-        if (!canPlay) return;
+        // 보드 매니저가 게임오버라고 하거나, 콤보 연출 중이면 조작 완전 금지
+        if (boardManager.isGameOver || !canPlay) return;
 
-        // 1. 이동 키: 오직 A, D, 아래 방향키만 사용합니다! (여기서 화살표를 제거했습니다)
         if (Input.GetKeyDown(KeyCode.A)) TryMove(-1, 0);
         if (Input.GetKeyDown(KeyCode.D)) TryMove(1, 0);
         if (Input.GetKeyDown(KeyCode.DownArrow)) TryMove(0, -1);
 
-        // 2. 회전 키: 오직 좌/우 화살표만 사용합니다!
         if (Input.GetKeyDown(KeyCode.RightArrow)) TryRotateClockwise();
         if (Input.GetKeyDown(KeyCode.LeftArrow)) TryRotateCounterClockwise();
 
-        // 3. 시간 경과에 따른 자동 낙하
         fallTimer += Time.deltaTime;
         if (fallTimer >= fallSpeed)
         {
@@ -73,6 +71,8 @@ public class PuyoController : MonoBehaviour
 
     public void SpawnNewPuyo()
     {
+        if (boardManager.isGameOver) return; // 게임오버면 새 뿌요 소환 금지!
+
         mainPuyoPos = new Vector2Int(boardManager.width / 2, boardManager.height - 1);
         rotationState = 0;
 

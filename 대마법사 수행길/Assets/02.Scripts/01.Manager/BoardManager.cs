@@ -240,7 +240,7 @@ public class BoardManager : MonoBehaviour
                 int ny = current.y + dir.y;
 
                 // 보드 안이고, 방문한 적 없으며, 색상(type)이 같으면 큐에 추가
-                if (IsValidPosition(nx, ny) && !visited[nx, ny] && grid[nx, ny] == type)
+                if (IsValidPosition(nx, ny) && ny < height && !visited[nx, ny] && grid[nx, ny] == type)
                 {
                     visited[nx, ny] = true;     // 방문 표시
                     queue.Enqueue(new Vector2Int(nx, ny));      // 큐에 새로운 좌표 추가

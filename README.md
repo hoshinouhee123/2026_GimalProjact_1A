@@ -12,6 +12,10 @@
 
 
 
+**링크:https://drive.google.com/drive/folders/1Ks\_3LZ\_VwPHDX5DGFWfnMVS6Is7AVvHZ**
+
+
+
 **같은 색깔이 4개 이상 모였는지 찾을 때 사용한 방식**
 
 
@@ -44,8 +48,4 @@ y = 1부터 y = height까지 아래에서 위로(Bottom-Up) 스캔
 바닥에 닿아서 LockPuyos()가 실행될 때, bool mainIsLower = mainPuyoPos.y <= subPos.y; 로 Main과 Sub 중 누가 더 아래(Y값이 작은지)에 있는지 수학적으로 계산
 
 무조건 아래에 있는 녀석부터 DropAndLock 함수로 바닥까지 떨어뜨려 배열에 굳힘. 그 다음 위에 있는 녀석을 떨어뜨린다.
-
-
-
-
 

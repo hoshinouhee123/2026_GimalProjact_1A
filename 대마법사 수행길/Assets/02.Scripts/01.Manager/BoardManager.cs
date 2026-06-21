@@ -48,6 +48,8 @@ public class BoardManager : MonoBehaviour
     // 0: 빈 셀, 1: 빨간 뿌요, 2: 파란 뿌요, 3: 노란 뿌요, 4: 초록 뿌요 등
     private int[,] grid;
 
+    private int[,] levelGrid;
+
     [Header("Effects")]
     public GameObject popEffectPrefab; // 새로 추가: 터질 때 생성할 파티클 이펙트
 
@@ -129,14 +131,14 @@ public class BoardManager : MonoBehaviour
 
     public void PlacePuyo(int x, int y, int type)
     {
-        // 수정됨: 블록이 천장을 넘어가면 게임오버 발동
+        // 천장을 넘으면 게임오버!
         if (y >= height)
         {
             TriggerGameOver("보드가 꽉 찼습니다!");
             return;
         }
 
-        grid[x, y] = type;
+        grid[x, y] = type; // 보드에 타입(레벨) 기록
 
         Vector3 pos = GridToWorldPosition(x, y);
         GameObject newPuyo = Instantiate(puyoPrefab, pos, Quaternion.identity);
@@ -144,11 +146,13 @@ public class BoardManager : MonoBehaviour
         SpriteRenderer sr = newPuyo.GetComponent<SpriteRenderer>();
         sr.color = Color.white;
 
-        if (type >= 1 && type <= 4)
+        // puyoSprites 배열에서 타입(1, 2, 3...)에 맞는 이미지를 씌워줍니다.
+        if (type >= 1 && type < puyoSprites.Length)
         {
             sr.sprite = puyoSprites[type];
         }
 
+        
         puyoObjects[x, y] = newPuyo;
     }
 
@@ -215,49 +219,45 @@ public class BoardManager : MonoBehaviour
     }
 
     // 6. 특정 좌표에서 같은 색상의 뿌요가 연결된 모든 좌표를 찾는 함수 (연쇄 판정에 사용)
-    public List<Vector2Int> FindConnectedPuyos(int startX, int startY, int type)    //BFS 알고리즘을 사용하여 같은 색상의 뿌요가 연결된 모든 좌표를 찾는 함수
+    public List<Vector2Int> FindConnectedPuyos(int startX, int startY, int type)
     {
-        List<Vector2Int> connected = new List<Vector2Int>();        //연결된 뿌요의 좌표를 저장할 리스트
-        Queue<Vector2Int> queue = new Queue<Vector2Int>();          // 방문 여부를 저장하는 2D 배열
-        bool[,] visited = new bool[width, height];                  // 방문 여부를 저장하는 2D 배열 초기화
+        List<Vector2Int> connected = new List<Vector2Int>();
+        Queue<Vector2Int> queue = new Queue<Vector2Int>();
+        bool[,] visited = new bool[width, height];
 
-        // 시작점 설정
         queue.Enqueue(new Vector2Int(startX, startY));
         visited[startX, startY] = true;
 
-        // 상, 하, 좌, 우 방향
         Vector2Int[] directions = { Vector2Int.up, Vector2Int.down, Vector2Int.left, Vector2Int.right };
 
-        while (queue.Count > 0) //  큐가 빌 때까지 반복
+        while (queue.Count > 0)
         {
-            Vector2Int current = queue.Dequeue();   // 큐에서 현재 좌표를 꺼냄
-            connected.Add(current);     //  현재 좌표를 연결된 리스트에 추가
+            Vector2Int current = queue.Dequeue();
+            connected.Add(current);
 
-            // 4방향 검사
             foreach (Vector2Int dir in directions)
             {
                 int nx = current.x + dir.x;
                 int ny = current.y + dir.y;
 
-                // 보드 안이고, 방문한 적 없으며, 색상(type)이 같으면 큐에 추가
+                // 보드 안쪽이고, 천장(height) 안 넘고, 아직 방문 안 했고, 타입(색깔)이 같으면 연결!
                 if (IsValidPosition(nx, ny) && ny < height && !visited[nx, ny] && grid[nx, ny] == type)
                 {
-                    visited[nx, ny] = true;     // 방문 표시
-                    queue.Enqueue(new Vector2Int(nx, ny));      // 큐에 새로운 좌표 추가
+                    visited[nx, ny] = true;
+                    queue.Enqueue(new Vector2Int(nx, ny));
                 }
             }
         }
-        return connected;       // 연결된 뿌요의 좌표 리스트 반환
+        return connected;
     }
 
-    // 수정됨: 매개변수로 콤보(comboCount)를 받아서 점수를 계산합니다.
     public bool CheckAndDestroyMatches(int comboCount)
     {
         bool[,] hasMatched = new bool[width, height];
         bool matchFound = false;
-        int destroyedPuyoCount = 0; // 터진 뿌요 개수 세기
+        int destroyedPuyoCount = 0;
+        int mergeScoreBonus = 0;
 
-        // (기존 Flood Fill 탐색 로직 동일하게 유지...)
         for (int x = 0; x < width; x++)
         {
             for (int y = 0; y < height; y++)
@@ -265,16 +265,62 @@ public class BoardManager : MonoBehaviour
                 if (grid[x, y] != 0 && !hasMatched[x, y])
                 {
                     int type = grid[x, y];
+                    // 탐색할 때 level 관련은 빼고, 예전처럼 type만 넘깁니다.
                     List<Vector2Int> connected = FindConnectedPuyos(x, y, type);
 
                     if (connected.Count >= 4)
                     {
                         matchFound = true;
-                        destroyedPuyoCount += connected.Count; // 개수 누적
+                        destroyedPuyoCount += connected.Count;
+                        mergeScoreBonus += type * 2; // 상위 원소일수록 점수 폭발!
+
+                        // 진화할 다음 단계 설정 (현재 타입 + 1)
+                        int nextType = type + 1;
+
+                        // 목표 위치 찾기 (가장 바닥에 있는 블록 기준)
+                        Vector2Int mergeTarget = connected[0];
+                        foreach (Vector2Int pos in connected)
+                        {
+                            if (pos.y < mergeTarget.y) mergeTarget = pos;
+                        }
 
                         foreach (Vector2Int pos in connected)
                         {
                             hasMatched[pos.x, pos.y] = true;
+
+                            if (pos == mergeTarget)
+                            {
+                                if (nextType >= puyoSprites.Length)
+                                {
+                                    grid[pos.x, pos.y] = 0;
+                                    StartCoroutine(ShrinkAndDestroy(puyoObjects[pos.x, pos.y]));
+                                    puyoObjects[pos.x, pos.y] = null;
+                                    score += 10000;
+                                    continue;
+                                }
+
+                                grid[pos.x, pos.y] = nextType;
+
+                                GameObject mergedPuyo = puyoObjects[pos.x, pos.y];
+                                SpriteRenderer sr = mergedPuyo.GetComponent<SpriteRenderer>();
+                                sr.sprite = puyoSprites[nextType];
+
+                                // 완벽 수정됨: Vector3.one 이 아니라, 프리팹 원본의 기본 크기로 복구합니다!
+                                Vector3 originalScale = puyoPrefab.transform.localScale;
+                                mergedPuyo.transform.localScale = originalScale;
+
+                                // 통통 튕기는 애니메이션도 원본 크기 비율에 맞춰서 재생합니다.
+                                mergedPuyo.transform.DOPunchScale(originalScale * 0.3f, 0.4f, 10, 1);
+
+                                if (popEffectPrefab != null) Instantiate(popEffectPrefab, mergedPuyo.transform.position, Quaternion.identity);
+                            }
+                            else
+                            {
+                                // 나머지 3개는 화면에서 지워버림(재물로 바쳐짐)
+                                grid[pos.x, pos.y] = 0;
+                                StartCoroutine(ShrinkAndDestroy(puyoObjects[pos.x, pos.y]));
+                                puyoObjects[pos.x, pos.y] = null;
+                            }
                         }
                     }
                 }
@@ -283,72 +329,47 @@ public class BoardManager : MonoBehaviour
 
         if (matchFound)
         {
-            //  1. 점수 계산 로직
-            CalculateScore(destroyedPuyoCount, comboCount);
-
-            //  2. 콤보 텍스트 DOTween 연출 (2연쇄 이상일 때만)
-            if (comboCount >= 2)
-            {
-                ShowComboText(comboCount);
-            }
-
-            for (int x = 0; x < width; x++)
-            {
-                for (int y = 0; y < height; y++)
-                {
-                    if (hasMatched[x, y])
-                    {
-                        grid[x, y] = 0;
-
-                        GameObject puyoToDestroy = puyoObjects[x, y];
-                        Vector3 pos = puyoToDestroy.transform.position;
-
-                        if (popEffectPrefab != null) Instantiate(popEffectPrefab, pos, Quaternion.identity);
-
-                        StartCoroutine(ShrinkAndDestroy(puyoToDestroy));
-                        puyoObjects[x, y] = null;
-                    }
-                }
-            }
+            CalculateScore(destroyedPuyoCount * mergeScoreBonus, comboCount);
+            if (comboCount >= 2) ShowComboText(comboCount);
             return true;
         }
         return false;
     }
 
     // 새로 추가: 공중에 뜬 뿌요를 바닥까지 끌어내리는 중력 함수
+    // 부드럽게 통통 떨어지는 중력 애니메이션 적용!
     public void ApplyGravity()
     {
-        // 각 세로줄(열)마다 검사합니다.
         for (int x = 0; x < width; x++)
         {
-            // 맨 밑바닥(0)은 더 떨어질 곳이 없으니 1층부터 꼭대기까지 검사합니다.
+            // 아래에서 위로 스캔
             for (int y = 1; y < height; y++)
             {
-                // 해당 칸에 뿌요가 존재한다면
                 if (grid[x, y] != 0)
                 {
                     int targetY = y;
+                    while (targetY - 1 >= 0 && grid[x, targetY - 1] == 0) { targetY--; }
 
-                    // 자신의 바로 아래 칸이 범위 안이고, 빈칸(0)이라면 계속 한 칸씩 목표치를 내립니다.
-                    while (targetY - 1 >= 0 && grid[x, targetY - 1] == 0)
-                    {
-                        targetY--;
-                    }
-
-                    // 만약 원래 위치(y)보다 더 아래(targetY)로 떨어질 수 있다면
                     if (targetY != y)
                     {
-                        // 1. 보드 배열 데이터 이동
                         grid[x, targetY] = grid[x, y];
-                        grid[x, y] = 0; // 원래 있던 자리는 빈칸으로
+                        grid[x, y] = 0;
 
-                        // 2. 화면의 오브젝트 이동
                         GameObject puyo = puyoObjects[x, y];
                         puyoObjects[x, targetY] = puyo;
                         puyoObjects[x, y] = null;
 
-                        // 실제 유니티 화면에서의 위치를 뚝 떨어뜨림
-                        puyo.transform.position = GridToWorldPosition(x, targetY);
+                        if (puyo != null)
+                        {
+                            // 수정됨: 순간이동(position=...) 대신 부드럽게 떨어지는 DOMove 사용!
+                            Vector3 targetPos = GridToWorldPosition(x, targetY);
+                            // 0.3초 동안 목표 위치로 떨어지며, 바닥에 닿을 때 살짝 통통 튕깁니다 (OutBounce)
+                            puyo.transform.DOMove(targetPos, 0.3f).SetEase(Ease.OutBounce);
+                        }
+                        else
+                        {
+                            grid[x, targetY] = 0;
+                        }
                     }
                 }
             }

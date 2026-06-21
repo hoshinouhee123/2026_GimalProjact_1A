@@ -2132,7 +2132,7 @@ MonoBehaviour:
   timerText: {fileID: 1930598870}
   gameOverPanel: {fileID: 1126070377}
   finalScoreText: {fileID: 823851319}
-  timeLimit: 300
+  timeLimit: 180
   isGameOver: 0
   scoreText: {fileID: 408658622}
   comboText: {fileID: 1094676159}

@@ -31,9 +31,10 @@ public class PuyoController : MonoBehaviour
 
     void Start()
     {
-        // 3. 게임 시작 시 '다음 뿌요'를 먼저 하나 뽑아둡니다.
-        nextMainType = Random.Range(1, 5);
-        nextSubType = Random.Range(1, 5);
+        // 수정됨: 게임을 맨 처음 시작할 때 뽑는 미리보기도 
+        // 무조건 1~2 레벨로, 그리고 두 개가 완벽히 똑같은 색상으로 나오게 수정!
+        nextMainType = Random.Range(1, 3);
+        nextSubType = nextMainType; // 서브를 메인과 똑같이 통일!
 
         SpawnNewPuyo();
     }
@@ -42,6 +43,11 @@ public class PuyoController : MonoBehaviour
     {
         // 보드 매니저가 게임오버라고 하거나, 콤보 연출 중이면 조작 완전 금지
         if (boardManager.isGameOver || !canPlay) return;
+
+        if (Input.GetKeyDown(KeyCode.Space))
+        {
+            HardDrop();
+        }
 
         if (Input.GetKeyDown(KeyCode.A)) TryMove(-1, 0);
         if (Input.GetKeyDown(KeyCode.D)) TryMove(1, 0);
@@ -58,37 +64,38 @@ public class PuyoController : MonoBehaviour
         }
     }
 
-    public void RerollNextPuyo()
-    {
-        nextMainType = Random.Range(1, 5);
-        nextSubType = Random.Range(1, 5);
-        UpdatePreviewVisuals();
-
-        // 텍스트뿐만 아니라 뿌요 이미지도 쫀득하게 튕기는 DOTween 효과!
-        if (nextMainPreviewObj != null) nextMainPreviewObj.transform.DOPunchScale(Vector3.one * 0.3f, 0.3f);
-        if (nextSubPreviewObj != null) nextSubPreviewObj.transform.DOPunchScale(Vector3.one * 0.3f, 0.3f);
-    }
+    
 
     public void SpawnNewPuyo()
     {
-        if (boardManager.isGameOver) return; // 게임오버면 새 뿌요 소환 금지!
+        if (boardManager.isGameOver) return;
 
         mainPuyoPos = new Vector2Int(boardManager.width / 2, boardManager.height - 1);
         rotationState = 0;
 
-        // 4. 미리 뽑아둔 '다음 뿌요'를 '현재 뿌요'로 가져옵니다.
         mainType = nextMainType;
         subType = nextSubType;
 
-        // 5. 새로운 '다음 뿌요'를 미리 뽑아둡니다.
-        nextMainType = Random.Range(1, 5);
-        nextSubType = Random.Range(1, 5);
+        // 수정됨: 1(불) 또는 2(물) 까지만 랜덤으로 나오게 조절! 
+        // (3까지 나오게 하려면 Random.Range(1, 4)로 하시면 됩니다)
+        nextMainType = Random.Range(1, 4);
+        nextSubType = nextMainType; // 무조건 두 개는 같은 속성으로 스폰
 
         mainPuyoObj.SetActive(true);
         subPuyoObj.SetActive(true);
 
         UpdateVisuals();
-        UpdatePreviewVisuals(); // 미리보기 화면 업데이트
+        UpdatePreviewVisuals();
+    }
+
+    public void RerollNextPuyo()
+    {
+        nextMainType = Random.Range(1, 3);
+        nextSubType = nextMainType;
+        UpdatePreviewVisuals();
+
+        if (nextMainPreviewObj != null) nextMainPreviewObj.transform.DOPunchScale(Vector3.one * 0.3f, 0.3f);
+        if (nextSubPreviewObj != null) nextSubPreviewObj.transform.DOPunchScale(Vector3.one * 0.3f, 0.3f);
     }
 
     private Vector2Int GetSubPuyoPos(Vector2Int mPos, int rot)
@@ -124,6 +131,19 @@ public class PuyoController : MonoBehaviour
         }
     }
 
+    private void HardDrop()
+    {
+        // 1. 현재 공중에 있는 상태 그대로 분리해서 바닥까지 즉시 떨어뜨림
+        LockPuyos();
+
+        // 2. 조종하던 원본 투명하게 숨기기
+        mainPuyoObj.SetActive(false);
+        subPuyoObj.SetActive(false);
+
+        // 3. 바로 터지는지 검사하는 코루틴 시작
+        StartCoroutine(ProcessMatchesRoutine());
+    }
+
     private void LockPuyos()
     {
         Vector2Int subPos = GetSubPuyoPos(mainPuyoPos, rotationState);
@@ -148,6 +168,7 @@ public class PuyoController : MonoBehaviour
         {
             targetY--;
         }
+        //이렇게 type까지만 딱 넘겨주면 완벽합니다!
         boardManager.PlacePuyo(x, targetY, type);
     }
 

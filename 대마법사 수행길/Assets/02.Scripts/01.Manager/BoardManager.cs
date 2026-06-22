@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -7,13 +8,35 @@ using UnityEngine.SceneManagement;
 
 public class BoardManager : MonoBehaviour
 {
+    [Header("Sound Effects (SFX)")]
+    public AudioSource audioSource; // 소리를 내줄 스피커
+    public AudioClip popSound;      // 뿌요 터질 때/합쳐질 때 소리
+    public AudioClip skillSound;    // 스킬 컷인 발동 소리
+
+    [Header("Skill Text Settings (에디터에서 수정 가능!)")]
+    public string fireBuffMessage = "점수 2배 버프!";
+    public string earthPopupMessage = "다음 보드 변경!";
+    public string airBuffMessage = "연쇄 점수 2배 활성화!";
+
+    [Header("Skill UI Effects")]
+    public GameObject fullScreenSpeedLines; // 전체 화면 속도선
+    public TextMeshProUGUI fireBuffText;    // 불 10초 타이머 텍스트
+    public TextMeshProUGUI airBuffText;     // 바람 활성화 텍스트
+    public TextMeshProUGUI skillPopupText;  // 땅 스킬 팝업 텍스트
+
     [Header("Game Over & Timer")]
     public TextMeshProUGUI timerText;       // 타이머 텍스트
     public GameObject gameOverPanel;        // 게임오버 패널
     public TextMeshProUGUI finalScoreText;  // 최종 점수 텍스트
 
+    [Header("Skill Cut-In Animation")]
+    public RectTransform cutInPanel;  // 하얀 선 역할을 할 마스크 패널
+    public UnityEngine.UI.Image characterImage; // 캐릭터 일러스트 이미지
+
     public float timeLimit = 180f;          // 제한 시간 3분 (180초)
     public bool isGameOver = false;         // 게임오버 상태 확인
+
+    private Vector3 popupOriginPos;
 
     [Header("UI & Score")]
     public TextMeshProUGUI scoreText;
@@ -32,6 +55,9 @@ public class BoardManager : MonoBehaviour
     private bool isFireActive = false;
     private float baseComboBonus = 1.5f; // 기본 연쇄 보너스 1.5배 (공기 스킬 쓰면 증가)
 
+    private Vector2 cutInTargetSize;
+    private Vector2 cutInOriginPos;
+
     [Header("Board Settings")]
     public int width = 7; //뿌요뿌요 가로 크기
     public int height = 12; //뿌요뿌요 세로 크기
@@ -41,6 +67,11 @@ public class BoardManager : MonoBehaviour
 
     // 인덱스 0은 비워두고, 1:불, 2:물, 3:땅, 4:공기 이미지를 넣을 예정.
     public Sprite[] puyoSprites;
+
+    // 속성별 캐릭터 얼굴 일러스트 (인스펙터에서 넣어주세요)
+    public Sprite fireFace;
+    public Sprite earthFace;
+    public Sprite airFace;
 
     private GameObject[,] puyoObjects; //보드 상의 뿌요 오브젝트를 저장하는 2D 배열
 
@@ -56,6 +87,9 @@ public class BoardManager : MonoBehaviour
     public Transform gameOverTitle;  // "Game Over"라고 적힌 큰 글자
     public Transform restartButton;  // "다시 하기" 버튼
 
+    // 스킬 중복 사용 방지용 변수
+    private bool isSkillPlaying = false;
+
     void Awake()
     {
         grid = new int[width, height];
@@ -65,7 +99,22 @@ public class BoardManager : MonoBehaviour
         comboText.gameObject.SetActive(false); // 시작할 때 콤보 텍스트 숨김
         UpdateScoreText();
 
-        gameOverPanel.SetActive(false); // 시작할 때 게임오버 패널 끄기
+        if (cutInPanel != null)
+        {
+            cutInTargetSize = cutInPanel.sizeDelta;
+            cutInOriginPos = cutInPanel.anchoredPosition;
+            cutInPanel.gameObject.SetActive(false); // 기억했으면 평소엔 꺼둡니다.
+        }
+
+        if (skillPopupText != null)
+        {
+            popupOriginPos = skillPopupText.transform.localPosition;
+            skillPopupText.gameObject.SetActive(false);
+        }
+        if (fullScreenSpeedLines != null) fullScreenSpeedLines.SetActive(false);
+        if (fireBuffText != null) fireBuffText.gameObject.SetActive(false);
+        if (airBuffText != null) airBuffText.gameObject.SetActive(false);
+        if (skillPopupText != null) skillPopupText.gameObject.SetActive(false);
     }
 
     void Update()
@@ -329,6 +378,11 @@ public class BoardManager : MonoBehaviour
 
         if (matchFound)
         {
+            if (audioSource != null && popSound != null)
+            {
+                audioSource.PlayOneShot(popSound);
+            }
+
             CalculateScore(destroyedPuyoCount * mergeScoreBonus, comboCount);
             if (comboCount >= 2) ShowComboText(comboCount);
             return true;
@@ -442,45 +496,168 @@ public class BoardManager : MonoBehaviour
     // ==========================================
     // 스킬 발동 함수들 (버튼에 연결할 것들)
     // ==========================================
-
-    // 1. 불 스킬 (10초간 점수 2배)
     public void UseFireSkill()
     {
-        if (fireUses > 0 && !isFireActive)
+        if (fireUses > 0 && !isFireActive && !isSkillPlaying)
         {
-            fireUses--;
-            Debug.Log(" 불 스킬 발동! 10초간 점수 2배!");
-            StartCoroutine(FireSkillTimer());
+            ExecuteSkillWithCutIn(fireFace, () =>
+            {
+                fireUses--;
+                StartCoroutine(FireSkillTimer());
+                StartCoroutine(SpeedLinesTimer()); // 1.5초 속도선 켜기!
+            });
         }
     }
 
     private IEnumerator FireSkillTimer()
     {
         isFireActive = true;
-        yield return new WaitForSeconds(10f);
+        fireBuffText.gameObject.SetActive(true);
+
+        float timer = 10f;
+        while (timer > 0)
+        {
+            // 에디터에서 적은 문구 뒤에 남은 시간만 딱 붙여줍니다!
+            fireBuffText.text = $"{fireBuffMessage} ({Mathf.CeilToInt(timer)}초)";
+            timer -= Time.deltaTime;
+            yield return null;
+        }
+
         isFireActive = false;
-        Debug.Log(" 불 스킬 종료.");
+        fireBuffText.gameObject.SetActive(false);
     }
 
-    // 2. 땅 스킬 (다음 블록 색깔 랜덤 변화)
+    // 2. 땅 스킬
     public void UseEarthSkill()
     {
-        if (earthUses > 0)
+        if (earthUses > 0 && !isSkillPlaying)
         {
-            earthUses--;
-            Debug.Log($" 땅 스킬 발동! 다음 블록 리롤 (남은횟수: {earthUses})");
-            puyoController.RerollNextPuyo(); // 조종사에게 명령!
+            ExecuteSkillWithCutIn(earthFace, () =>
+            {
+                earthUses--;
+                puyoController.RerollNextPuyo();
+
+                // 에디터에서 적은 문구를 띄웁니다!
+                ShowSkillPopup(earthPopupMessage);
+                StartCoroutine(SpeedLinesTimer()); // 1.5초 속도선 켜기!
+            });
         }
     }
 
-    // 3. 공기 스킬 (연쇄 보너스 증가 1.5배 -> 2.0배)
+    // 3. 공기(바람) 스킬
     public void UseAirSkill()
     {
-        if (airUses > 0)
+        if (airUses > 0 && !isSkillPlaying)
         {
-            airUses--;
-            Debug.Log(" 공기 스킬 발동! 이제부터 연쇄 보너스 대폭 증가!");
-            baseComboBonus = 2.0f;
+            ExecuteSkillWithCutIn(airFace, () =>
+            {
+                airUses--;
+                baseComboBonus = 2.0f;
+
+                airBuffText.gameObject.SetActive(true);
+                airBuffText.text = airBuffMessage; // 에디터 문구 띄우기!
+                airBuffText.transform.DOPunchScale(Vector3.one * 0.2f, 0.5f, 10, 1);
+
+                StartCoroutine(SpeedLinesTimer()); // 1.5초 속도선 켜기!
+            });
+        }
+    }
+
+    // 새로 추가: 순간 팝업 연출 함수
+    private void ShowSkillPopup(string message)
+    {
+        skillPopupText.gameObject.SetActive(true);
+        skillPopupText.text = message;
+
+        // 강제로 정중앙(Vector3.zero)으로 보내던 것을 지우고, 기억해둔 원래 위치로 설정합니다!
+        skillPopupText.transform.localPosition = popupOriginPos;
+        skillPopupText.transform.localScale = Vector3.zero;
+        skillPopupText.color = new Color(skillPopupText.color.r, skillPopupText.color.g, skillPopupText.color.b, 1f);
+
+        Sequence seq = DOTween.Sequence();
+
+        // 1. 0.3초 만에 띠용! 하고 커지면서 등장
+        seq.Append(skillPopupText.transform.DOScale(Vector3.one, 0.3f).SetEase(Ease.OutBack));
+
+        // 2.  원래 있던 위치에서 위로 150만큼 스르륵 올라가도록 수정!
+        seq.Join(skillPopupText.transform.DOLocalMoveY(popupOriginPos.y + 150f, 1.5f).SetEase(Ease.OutQuad));
+
+        // 3. 등장 1초 뒤부터 투명해지며 사라짐
+        seq.Join(skillPopupText.DOFade(0f, 0.5f).SetDelay(1.0f));
+
+        // 4. 애니메이션이 다 끝나면 오브젝트를 다시 꺼줌
+        seq.OnComplete(() => skillPopupText.gameObject.SetActive(false));
+    }
+
+    // ==========================================
+    //  페르소나 스타일 컷인 연출 코루틴 (카메라 쉐이크 적용!)
+    // ==========================================
+    private void ExecuteSkillWithCutIn(Sprite faceSprite, Action skillAction)
+    {
+        StartCoroutine(CutInRoutine(faceSprite, skillAction));
+    }
+
+    private IEnumerator CutInRoutine(Sprite faceSprite, Action skillAction)
+    {
+        isSkillPlaying = true;
+
+        if (audioSource != null && skillSound != null)
+        {
+            audioSource.PlayOneShot(skillSound);
+        }
+
+        characterImage.sprite = faceSprite;
+        cutInPanel.gameObject.SetActive(true);
+
+        // 수정됨: 에디터에서 설정한 원래 '위치'를 그대로 가져옵니다.
+        // 크기만 가로는 0, 세로는 15(얇은 선)로 찌그러뜨려서 시작합니다.
+        cutInPanel.anchoredPosition = cutInOriginPos;
+        cutInPanel.sizeDelta = new Vector2(0, 15);
+
+        Sequence seq = DOTween.Sequence();
+
+        // 수정됨: 에디터에서 설정한 원래 '가로 길이'만큼 쫙 가릅니다!
+        seq.Append(cutInPanel.DOSizeDelta(new Vector2(cutInTargetSize.x, 15), 0.15f).SetEase(Ease.OutExpo));
+
+        seq.AppendCallback(() => {
+            Camera.main.transform.DOShakePosition(0.3f, 0.5f, 20);
+        });
+
+        // 수정됨: 에디터에서 설정한 원래 '세로 길이(높이)'까지 통통 튀며 확대됩니다!
+        seq.Append(cutInPanel.DOSizeDelta(cutInTargetSize, 0.22f).SetEase(Ease.OutBack));
+
+        characterImage.transform.localPosition = new Vector3(100, 0, 0);
+        seq.Join(characterImage.transform.DOLocalMoveX(-50, 0.7f).SetEase(Ease.OutQuad));
+
+        // 절정 타이밍: 스킬 효과가 발동하면서 '전체 화면 속도선'도 같이 터집니다!
+        yield return new WaitForSeconds(0.4f);
+
+        if (fullScreenSpeedLines != null) fullScreenSpeedLines.SetActive(true); // 전체 속도선 ON!
+
+        skillAction?.Invoke(); // 실제 스킬 내용 실행
+
+        yield return new WaitForSeconds(0.6f);
+
+        cutInPanel.DOAnchorPosX(cutInOriginPos.x - 2500, 0.2f).SetEase(Ease.InExpo);
+
+        yield return new WaitForSeconds(0.25f);
+
+        cutInPanel.gameObject.SetActive(false);
+        isSkillPlaying = false;
+
+        // 스킬 연출이 완전히 끝나고 1초 정도 더 속도감을 준 뒤에 전체 속도선을 끕니다.
+        yield return new WaitForSeconds(1.0f);
+        if (fullScreenSpeedLines != null) fullScreenSpeedLines.SetActive(false); // 전체 속도선 OFF!
+    }
+
+    // 1.5초 속도선 전용 함수
+    private IEnumerator SpeedLinesTimer()
+    {
+        if (fullScreenSpeedLines != null)
+        {
+            fullScreenSpeedLines.SetActive(true); // 속도선 ON
+            yield return new WaitForSeconds(1.5f); // 딱 1.5초만 대기
+            fullScreenSpeedLines.SetActive(false); // 속도선 OFF
         }
     }
 }

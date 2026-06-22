@@ -1,9 +1,14 @@
+using DG.Tweening; // DOTween 필수
 using UnityEngine;
 using UnityEngine.UI;
-using DG.Tweening; // DOTween 필수
 
 public class PersonaUIController : MonoBehaviour
 {
+    [Header("Audio Settings")]
+    [SerializeField] private AudioSource audioSource; // 효과음을 재생할 오디오 소스 컴포넌트
+    [SerializeField] private AudioClip slamSFX;      // 회전이 끝나고 쾅 박힐 때 재생할 효과음 파일
+    [SerializeField] private AudioClip cancelSFX;    // [선택사항] 아니오 버튼을 눌러 취소할 때 재생할 효과음 파일
+
     [Header("Buttons")]
     [SerializeField] private Button gameStartButton; // 게임 시작 버튼
     [SerializeField] private Button noButton;         // 아니오(취소) 버튼
@@ -85,6 +90,11 @@ public class PersonaUIController : MonoBehaviour
     // 회전이 "쾅" 멈춘 직후 시점
     private void OnRotationComplete()
     {
+        if (audioSource != null && slamSFX != null)
+        {
+            audioSource.PlayOneShot(slamSFX);
+        }
+
         // 1. 거친 지진 흔들림 적용 (부드러운 위아래 반동 완전 삭제)
         // 강도(shakeStrength)를 높이고, 진동수(vibrato)를 40으로 크게 올려 아주 빠르고 억센 충격을 줍니다.
         // 다섯 번째 인자인 snapping 값을 true로 설정하여 부드러운 소수점 보간 없이 딱딱 끊어지며 흔들리게 처리했습니다.
@@ -109,6 +119,11 @@ public class PersonaUIController : MonoBehaviour
         isAnimating = true;
 
         KillActiveTweens();
+
+        if (audioSource != null && cancelSFX != null)
+        {
+            audioSource.PlayOneShot(cancelSFX);
+        }
 
         // 1. 확인창 빠르게 팍 사라짐 (0.1초)
         confirmMenuPanel.DOScale(Vector3.zero, 0.1f)

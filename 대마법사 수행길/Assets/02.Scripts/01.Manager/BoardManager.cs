@@ -8,6 +8,14 @@ using UnityEngine.SceneManagement;
 
 public class BoardManager : MonoBehaviour
 {
+    [Header("Water Skill Settings")]
+    public Sprite waterFace;                 // 물 스킬 컷인 얼굴
+    public TextMeshProUGUI waterBuffText;    // 시간 정지 텍스트
+    public string waterBuffMessage = "시간 정지!"; // 에디터 수정용
+
+    private int waterUses = 1;               // 물 스킬 사용 가능 횟수 (1회)
+    private bool isWaterActive = false;      // 물 스킬 활성화 상태 확인
+
     [Header("Sound Effects (SFX)")]
     public AudioSource audioSource; // 소리를 내줄 스피커
     public AudioClip popSound;      // 뿌요 터질 때/합쳐질 때 소리
@@ -115,13 +123,17 @@ public class BoardManager : MonoBehaviour
         if (fireBuffText != null) fireBuffText.gameObject.SetActive(false);
         if (airBuffText != null) airBuffText.gameObject.SetActive(false);
         if (skillPopupText != null) skillPopupText.gameObject.SetActive(false);
+        if (waterBuffText != null) waterBuffText.gameObject.SetActive(false);
     }
 
     void Update()
     {
         if (isGameOver) return; // 게임오버면 타이머 정지
 
-        timeLimit -= Time.deltaTime; // 시간 감소
+        if (!isWaterActive)
+        {
+            timeLimit -= Time.deltaTime;
+        }
 
         if (timeLimit <= 0)
         {
@@ -561,6 +573,39 @@ public class BoardManager : MonoBehaviour
                 StartCoroutine(SpeedLinesTimer()); // 1.5초 속도선 켜기!
             });
         }
+    }
+
+
+    public void UseWaterSkill()
+    {
+        // 사용 횟수가 남아있고, 이미 작동 중이 아니고, 다른 컷인이 없을 때
+        if (waterUses > 0 && !isWaterActive && !isSkillPlaying)
+        {
+            ExecuteSkillWithCutIn(waterFace, () =>
+            {
+                waterUses--;
+                StartCoroutine(WaterSkillTimer()); // 시간 정지 코루틴 시작
+                StartCoroutine(SpeedLinesTimer()); // 1.5초 속도선 켜기
+            });
+        }
+    }
+
+    private IEnumerator WaterSkillTimer()
+    {
+        isWaterActive = true; // 타이머 정지 시작!
+        waterBuffText.gameObject.SetActive(true);
+
+        float timer = 10f; // 10초 유지
+        while (timer > 0)
+        {
+            // 남은 시간을 텍스트에 표시
+            waterBuffText.text = $"{waterBuffMessage} ({Mathf.CeilToInt(timer)}초)";
+            timer -= Time.deltaTime;
+            yield return null;
+        }
+
+        isWaterActive = false; // 타이머 다시 흐르기 시작!
+        waterBuffText.gameObject.SetActive(false);
     }
 
     // 새로 추가: 순간 팝업 연출 함수
